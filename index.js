@@ -12,7 +12,7 @@ const port = process.env.PORT || 3005;
 const allowedOrigins = [
   'http://localhost:5173', // Vite default port
   'http://localhost:3000',
-  'https://3ds-payment-frontend.vercel.app', // Update with your actual Vercel URL
+  'https://flow-3-ds.vercel.app', // Update with your actual Vercel URL
   process.env.FRONTEND_URL
 ].filter(Boolean);
 
