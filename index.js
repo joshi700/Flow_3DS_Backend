@@ -203,6 +203,91 @@ app.post('/api/initiate-authentication', async (req, res) => {
   }
 });
 
+// STEP 3: Retrieve Order Details (NEW)
+// GET request to retrieve order status
+app.post('/api/retrieve-order', async (req, res) => {
+  try {
+    console.log('[STEP 3] Retrieve Order Details - Request received');
+
+    const {
+      merchantId,
+      username,
+      password,
+      apiBaseUrl,
+      apiVersion,
+      orderId,
+      method = 'GET',
+      url
+    } = req.body;
+
+    // Validate credentials
+    if (!merchantId || !username || !password) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required credentials'
+      });
+    }
+
+    // Use provided URL or construct default
+    const apiUrl = url || `${apiBaseUrl}/api/rest/version/${apiVersion}/merchant/${merchantId}/order/${orderId}`;
+    
+    console.log('[STEP 3] Method:', method);
+    console.log('[STEP 3] API URL:', apiUrl);
+
+    const authToken = createAuthToken(username, password);
+    
+    const response = await axios({
+      method: 'GET', // Always GET for this endpoint
+      url: apiUrl,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Basic ${authToken}`,
+        'Accept': 'application/json'
+      },
+      timeout: 30000
+    });
+
+    console.log('[STEP 3] Response status:', response.status);
+    console.log('[STEP 3] Order status:', response.data.status);
+
+    res.json({
+      success: true,
+      step: 3,
+      data: response.data,
+      orderStatus: response.data.status,
+      totalAuthorizedAmount: response.data.totalAuthorizedAmount,
+      totalCapturedAmount: response.data.totalCapturedAmount
+    });
+
+  } catch (error) {
+    console.error('[STEP 3] Error:', error.message);
+    if (error.response) {
+      console.error('[STEP 3] API Error Response:', error.response.data);
+      res.status(error.response.status).json({
+        success: false,
+        step: 3,
+        error: 'MPGS API Error',
+        details: error.response.data,
+        status: error.response.status
+      });
+    } else if (error.request) {
+      res.status(500).json({
+        success: false,
+        step: 3,
+        error: 'Network Error',
+        details: 'No response from MPGS API'
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        step: 3,
+        error: 'Request Error',
+        details: error.message
+      });
+    }
+  }
+});
+
 // STEP 2: Authenticate Payer
 // Performs 3DS challenge or frictionless authentication - accepts raw request body
 app.post('/api/authenticate-payer', async (req, res) => {
@@ -457,7 +542,8 @@ app.get('/health', (req, res) => {
     endpoints: {
       step1: '/api/initiate-authentication',
       step2: '/api/authenticate-payer',
-      step3: '/api/authorize-pay',
+      step3: '/api/retrieve-order',
+      step4: '/api/authorize-pay',
       testConfig: '/api/test-config'
     }
   });
@@ -489,7 +575,8 @@ app.listen(port, () => {
   console.log('🔐 Available Endpoints:');
   console.log('  POST /api/initiate-authentication (Step 1)');
   console.log('  POST /api/authenticate-payer (Step 2)');
-  console.log('  POST /api/authorize-pay (Step 3)');
+  console.log('  POST /api/retrieve-order (Step 3)');
+  console.log('  POST /api/authorize-pay (Step 4)');
   console.log('  POST /api/test-config');
   console.log('');
   console.log('🌐 CORS Configuration:');
