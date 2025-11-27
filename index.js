@@ -97,6 +97,56 @@ function maskSensitiveData(data) {
   return masked;
 }
 
+// Helper function to determine if Step 2 should be executed
+function shouldExecuteStep2(authenticationStatus) {
+  // Only execute Step 2 if authentication is AVAILABLE
+  if (authenticationStatus === 'AUTHENTICATION_AVAILABLE') {
+    return {
+      shouldExecute: true,
+      reason: 'Authentication is available - Step 2 (AUTHENTICATE_PAYER) is required'
+    };
+  }
+
+  // Skip Step 2 for these statuses
+  const skipStatuses = [
+    'AUTHENTICATION_NOT_AVAILABLE',
+    'AUTHENTICATION_NOT_SUPPORTED',
+    'AUTHENTICATION_NOT_IN_EFFECT',
+    'AUTHENTICATION_UNAVAILABLE',
+    'AUTHENTICATION_EXEMPT',
+    'AUTHENTICATION_ATTEMPTED',
+    'AUTHENTICATION_SUCCESSFUL',
+    'AUTHENTICATION_PENDING'
+  ];
+
+  if (skipStatuses.includes(authenticationStatus)) {
+    return {
+      shouldExecute: false,
+      reason: `Status is ${authenticationStatus} - Skip Step 2, proceed directly to Step 4 (PAY)`
+    };
+  }
+
+  // Stop flow for failed/rejected statuses
+  const stopStatuses = [
+    'AUTHENTICATION_FAILED',
+    'AUTHENTICATION_REJECTED'
+  ];
+
+  if (stopStatuses.includes(authenticationStatus)) {
+    return {
+      shouldExecute: false,
+      shouldStop: true,
+      reason: `Status is ${authenticationStatus} - Authentication failed, do not proceed with payment`
+    };
+  }
+
+  // Default: proceed with Step 2 if status is unknown or AUTHENTICATION_REQUIRED
+  return {
+    shouldExecute: true,
+    reason: `Status is ${authenticationStatus || 'UNKNOWN'} - Proceeding with Step 2 as default behavior`
+  };
+}
+
 // STEP 1: Initiate Authentication
 // Checks if 3DS is available for the card - accepts raw request body from UI
 app.post('/api/initiate-authentication', async (req, res) => {
@@ -166,12 +216,21 @@ app.post('/api/initiate-authentication', async (req, res) => {
     console.log('[STEP 1] Response status:', response.status);
     console.log('[STEP 1] Response data:', JSON.stringify(response.data, null, 2));
 
+    const authenticationStatus = response.data.authentication?.status;
+    console.log('[STEP 1] Authentication Status:', authenticationStatus);
+
+    // Determine if Step 2 should be executed
+    const step2Decision = shouldExecuteStep2(authenticationStatus);
+    console.log('[STEP 1] Step 2 Decision:', step2Decision);
+
     res.json({
       success: true,
       step: 1,
       data: response.data,
-      authenticationStatus: response.data.authentication?.status,
-      gatewayRecommendation: response.data.response?.gatewayRecommendation
+      authenticationStatus: authenticationStatus,
+      gatewayRecommendation: response.data.response?.gatewayRecommendation,
+      step2Required: step2Decision.shouldExecute,
+      step2Decision: step2Decision
     });
 
   } catch (error) {
@@ -288,8 +347,8 @@ app.post('/api/retrieve-order', async (req, res) => {
   }
 });
 
-// STEP 2: Authenticate Payer
-// Performs 3DS challenge or frictionless authentication - accepts raw request body
+// STEP 2: Authenticate Payer (3DS Challenge)
+// Only called when AUTHENTICATION_AVAILABLE - accepts raw request body
 app.post('/api/authenticate-payer', async (req, res) => {
   try {
     console.log('[STEP 2] Authenticate Payer - Request received');
