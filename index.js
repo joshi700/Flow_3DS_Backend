@@ -216,8 +216,52 @@ app.post('/api/initiate-authentication', async (req, res) => {
     console.log('[STEP 1] Response status:', response.status);
     console.log('[STEP 1] Response data:', JSON.stringify(response.data, null, 2));
 
-    const authenticationStatus = response.data.authentication?.status;
-    console.log('[STEP 1] Authentication Status:', authenticationStatus);
+    // Extract authentication status with multiple fallbacks
+    let authenticationStatus = response.data.authentication?.status;
+    
+    // Fallback 1: Check authentication.version.status
+    if (!authenticationStatus && response.data.authentication?.version?.status) {
+      authenticationStatus = response.data.authentication.version.status;
+      console.log('[STEP 1] Found auth status in authentication.version.status');
+    }
+    
+    // Fallback 2: Check authentication.3ds.authenticationStatus
+    if (!authenticationStatus && response.data.authentication?.['3ds']?.authenticationStatus) {
+      authenticationStatus = response.data.authentication['3ds'].authenticationStatus;
+      console.log('[STEP 1] Found auth status in authentication.3ds.authenticationStatus');
+    }
+    
+    // Fallback 3: Check authentication.3ds1.authenticationStatus
+    if (!authenticationStatus && response.data.authentication?.['3ds1']?.authenticationStatus) {
+      authenticationStatus = response.data.authentication['3ds1'].authenticationStatus;
+      console.log('[STEP 1] Found auth status in authentication.3ds1.authenticationStatus');
+    }
+    
+    // Fallback 4: Check authentication.3ds2.authenticationStatus
+    if (!authenticationStatus && response.data.authentication?.['3ds2']?.authenticationStatus) {
+      authenticationStatus = response.data.authentication['3ds2'].authenticationStatus;
+      console.log('[STEP 1] Found auth status in authentication.3ds2.authenticationStatus');
+    }
+    
+    // Fallback 5: Check result and response
+    if (!authenticationStatus) {
+      console.log('[STEP 1] WARNING - authentication.status not found in response');
+      console.log('[STEP 1] Result:', response.data.result);
+      console.log('[STEP 1] Gateway Recommendation:', response.data.response?.gatewayRecommendation);
+      console.log('[STEP 1] Full authentication object:', JSON.stringify(response.data.authentication, null, 2));
+      
+      // If result is FAILURE and gatewayRecommendation is not PROCEED, assume authentication not supported
+      if (response.data.result === 'FAILURE' && response.data.response?.gatewayRecommendation !== 'PROCEED') {
+        authenticationStatus = 'AUTHENTICATION_NOT_SUPPORTED';
+        console.log('[STEP 1] Defaulting to AUTHENTICATION_NOT_SUPPORTED based on FAILURE result');
+      } else if (response.data.result === 'SUCCESS' || response.data.response?.gatewayRecommendation === 'PROCEED') {
+        // If successful but no auth status, likely frictionless
+        authenticationStatus = 'AUTHENTICATION_SUCCESSFUL';
+        console.log('[STEP 1] Defaulting to AUTHENTICATION_SUCCESSFUL based on SUCCESS result');
+      }
+    }
+    
+    console.log('[STEP 1] Final Authentication Status:', authenticationStatus);
 
     // Determine if Step 2 should be executed
     const step2Decision = shouldExecuteStep2(authenticationStatus);
