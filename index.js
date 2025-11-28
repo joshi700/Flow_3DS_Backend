@@ -219,33 +219,45 @@ app.post('/api/initiate-authentication', async (req, res) => {
     // Extract authentication status with multiple fallbacks
     let authenticationStatus = response.data.authentication?.status;
     
-    // Fallback 1: Check authentication.version.status
+    // Fallback 1: Check order.authenticationStatus (MOST COMMON LOCATION)
+    if (!authenticationStatus && response.data.order?.authenticationStatus) {
+      authenticationStatus = response.data.order.authenticationStatus;
+      console.log('[STEP 1] Found auth status in order.authenticationStatus:', authenticationStatus);
+    }
+    
+    // Fallback 2: Check transaction.authenticationStatus
+    if (!authenticationStatus && response.data.transaction?.authenticationStatus) {
+      authenticationStatus = response.data.transaction.authenticationStatus;
+      console.log('[STEP 1] Found auth status in transaction.authenticationStatus:', authenticationStatus);
+    }
+    
+    // Fallback 3: Check authentication.version.status
     if (!authenticationStatus && response.data.authentication?.version?.status) {
       authenticationStatus = response.data.authentication.version.status;
       console.log('[STEP 1] Found auth status in authentication.version.status');
     }
     
-    // Fallback 2: Check authentication.3ds.authenticationStatus
+    // Fallback 4: Check authentication.3ds.authenticationStatus
     if (!authenticationStatus && response.data.authentication?.['3ds']?.authenticationStatus) {
       authenticationStatus = response.data.authentication['3ds'].authenticationStatus;
       console.log('[STEP 1] Found auth status in authentication.3ds.authenticationStatus');
     }
     
-    // Fallback 3: Check authentication.3ds1.authenticationStatus
+    // Fallback 5: Check authentication.3ds1.authenticationStatus
     if (!authenticationStatus && response.data.authentication?.['3ds1']?.authenticationStatus) {
       authenticationStatus = response.data.authentication['3ds1'].authenticationStatus;
       console.log('[STEP 1] Found auth status in authentication.3ds1.authenticationStatus');
     }
     
-    // Fallback 4: Check authentication.3ds2.authenticationStatus
+    // Fallback 6: Check authentication.3ds2.authenticationStatus
     if (!authenticationStatus && response.data.authentication?.['3ds2']?.authenticationStatus) {
       authenticationStatus = response.data.authentication['3ds2'].authenticationStatus;
       console.log('[STEP 1] Found auth status in authentication.3ds2.authenticationStatus');
     }
     
-    // Fallback 5: Check result and response
+    // Fallback 7: Check result and response (LAST RESORT)
     if (!authenticationStatus) {
-      console.log('[STEP 1] WARNING - authentication.status not found in response');
+      console.log('[STEP 1] WARNING - authentication.status not found in any standard location');
       console.log('[STEP 1] Result:', response.data.result);
       console.log('[STEP 1] Gateway Recommendation:', response.data.response?.gatewayRecommendation);
       console.log('[STEP 1] Full authentication object:', JSON.stringify(response.data.authentication, null, 2));
